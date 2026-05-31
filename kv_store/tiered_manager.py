@@ -20,7 +20,7 @@ class TieredKVManager:
             return self._hot_cache[session_id]
 
         cached = self.warm_backend.load(session_id)
-        if cached is not None:
+        if cached is not None or self.warm_backend.exists(session_id):
             self._set_hot(session_id, cached)
         return cached
 
@@ -30,6 +30,9 @@ class TieredKVManager:
 
     def exists(self, session_id: str) -> bool:
         return session_id in self._hot_cache or self.warm_backend.exists(session_id)
+
+    def in_hot_tier(self, session_id: str) -> bool:
+        return session_id in self._hot_cache
 
     def _set_hot(self, session_id: str, kv_cache: Any) -> None:
         self._hot_cache[session_id] = kv_cache

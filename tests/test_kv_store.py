@@ -30,11 +30,24 @@ class TieredKVManagerTests(unittest.TestCase):
             payload = {"k": [1, 2, 3]}
 
             manager.save("session-2", payload)
-            manager._hot_cache.clear()
+            manager.save("session-3", {"k": [99]})
+            self.assertFalse(manager.in_hot_tier("session-2"))
 
             loaded = manager.load("session-2")
             self.assertEqual(loaded, payload)
             self.assertTrue(manager.exists("session-2"))
+            self.assertTrue(manager.in_hot_tier("session-2"))
+
+    def test_load_supports_none_payload(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backend = DiskBackend(temp_dir)
+            manager = TieredKVManager(backend, hot_capacity=1)
+
+            manager.save("session-none", None)
+            manager.save("session-other", {"k": [9]})
+
+            loaded = manager.load("session-none")
+            self.assertIsNone(loaded)
 
 
 if __name__ == "__main__":

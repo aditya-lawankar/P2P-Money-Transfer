@@ -8,22 +8,35 @@ from .base import KVCacheBackend
 
 
 class DiskBackend(KVCacheBackend):
+    """Disk-backed KV storage for trusted local cache files.
+
+    Files are serialized with pickle for tensor-like payload compatibility.
+    The backend must only read files from a directory controlled by the
+    application with restricted filesystem permissions.
+    """
+
     def __init__(self, root_dir: str):
         self.root_dir = Path(root_dir).resolve()
         self.root_dir.mkdir(parents=True, exist_ok=True)
 
     def _session_path(self, session_id: str) -> Path:
         path = (self.root_dir / f"{session_id}.pkl").resolve()
-        if self.root_dir not in path.parents:
-            raise ValueError("Invalid session id path")
+        if not path.is_relative_to(self.root_dir):
+            raise ValueError("Session ID would resolve outside storage directory")
         return path
 
     def save(self, session_id: str, kv_cache: Any) -> None:
         file_path = self._session_path(session_id)
-        with tempfile.NamedTemporaryFile("wb", dir=self.root_dir, delete=False) as tmp_file:
-            pickle.dump(kv_cache, tmp_file, protocol=pickle.HIGHEST_PROTOCOL)
-            temp_name = tmp_file.name
-        os.replace(temp_name, file_path)
+        temp_name = None
+        try:
+            with tempfile.NamedTemporaryFile("wb", dir=self.root_dir, delete=False) as tmp_file:
+                pickle.dump(kv_cache, tmp_file, protocol=pickle.HIGHEST_PROTOCOL)
+                temp_name = tmp_file.name
+            os.replace(temp_name, file_path)
+        except Exception:
+            if temp_name and os.path.exists(temp_name):
+                os.unlink(temp_name)
+            raise
 
     def load(self, session_id: str) -> Any:
         file_path = self._session_path(session_id)
